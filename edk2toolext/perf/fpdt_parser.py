@@ -1192,13 +1192,13 @@ class SystemFirmwareTable:
         table_id_as_int = struct.unpack("<i", table_id)[0]  # TableId is little endian or native
         table_length = 1000
         table = create_string_buffer(table_length)
-        if self._get_system_firmware_table is not None:
+        if self._get_system_firmware_table is not None: # mock
             kernel32 = windll.kernel32
             logging.info(
                 f"Calling GetSystemFirmwareTable( fw_table_provider=0x{table_type:x},"
                 f" fw_table_id=0x{table_id_as_int:X} )"
             )
-            length = self._get_system_firmware_table(table_type, table_id_as_int, table, table_length)
+            length = self._get_system_firmware_table(table_type, table_id_as_int, table, table_length) # mock
             if length > table_length:
                 logging.info(f"Table length is: 0x{length:x}")
                 table = create_string_buffer(length)
@@ -1293,6 +1293,7 @@ def fbpt_parsing_factory(fbpt_contents_file: BinaryIO, fbpt_records_list: list) 
         # GUID_QWORD_EVENT_TYPE
         # GUID_QWORD_STRING_EVENT_TYPE
         if fbpt_record_header.performance_record_type == FIRMWARE_BASIC_BOOT_PERFORMANCE_DATA_EVENT_TYPE:
+            print("here")
             fw_basic_boot_performance_data_record_string: bytes = fbpt_contents_file.read(
                 FwBasicBootPerformanceDataRecord.size
             )
@@ -1412,6 +1413,57 @@ def get_model() -> str:
     except Exception as e:
         logging.error(f"Failed to retrieve model: {e}")
         return "Unknown"
+
+# Represents the main execution environment to parse FPDT
+class ParserApp:
+    def __init__(self):
+        parser = argparse.ArgumentParser(description="FPDT Parser Tool")
+        parser.add_argument(
+            "-t",
+            "--output_text",
+            dest="output_text_file",
+            help="Name of the output text file which will contain the FPDT info",
+            default=None,
+        )
+        parser.add_argument(
+            "-x",
+            "--output_xml",
+            dest="output_xml_file",
+            help="Name of the output XML file which will contain the FPDT info",
+            default=None,
+        )
+        parser.add_argument(
+            "-b",
+            "--input_bin",
+            dest="input_fbpt_bin",
+            help="Name of the input binary file which contains the FBPT",
+            default=None,
+        )
+        self.options = parser.parse_args()
+        self.text_log = self.handle_output_file()
+
+    def set_up_logging(self):
+        logger = logging.getLogger("")
+        logger.setLevel(logging.INFO)
+        formatter = logging.Formatter("%(levelname)s - %(message)s")
+        console = logging.StreamHandler()
+        console.setLevel(logging.CRITICAL)
+        console.setFormatter(formatter)
+        logger.addHandler(console)
+
+    def handle_output_file(self):
+        if self.options.output_xml_file:
+            if len(self.options.output_xml_file) < 2:
+                logging.critical("The output XML file parameter is invalid")
+                raise ValueError("Output XML file name must be at least 2 characters long")
+
+        if self.options.output_text_file:
+            if len(self.options.output_text_file) < 2:
+                logging.critical("The output text file parameter is invalid")
+                raise ValueError("Output text file name must be at least 2 characters long")
+            else:
+                text_log = open(self.options.output_text_file, "w")
+                return text_log
 
 
 def main() -> None:

@@ -9,5 +9,6 @@
     "editor.codeActionsOnSave": {
       "source.fixAll.ruff": "explicit"
     }
-  }
+  },
+  "editor.formatOnSave": false
 }

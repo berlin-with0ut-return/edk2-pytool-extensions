@@ -1,6 +1,12 @@
+from ctypes import c_void_p, create_string_buffer
 import struct
 import xml.etree.ElementTree as ET
+import edk2toolext
 import pytest
+from unittest.mock import Mock, patch, call, MagicMock
+import sys
+import types
+
 
 from edk2toolext.perf.fpdt_parser import (
     AcpiTableHeader,
@@ -11,6 +17,7 @@ from edk2toolext.perf.fpdt_parser import (
     GuidEventRecord,
     DynamicStringEventRecord,
     DualGuidStringEventRecord,
+    GuidQwordEventRecord,
     GuidQwordStringEventRecord,
     FIRMWARE_BASIC_BOOT_PERFORMANCE_DATA_EVENT_TYPE,
     GUID_EVENT_TYPE,
@@ -22,11 +29,11 @@ from edk2toolext.perf.fpdt_parser import (
     FPDT_GUID_QWORD_EVENT_TYPE,
     GUID_QWORD_STRING_EVENT_TYPE,
     FPDT_GUID_QWORD_STRING_EVENT_TYPE,
+    SystemFirmwareTable,
+    fbpt_parsing_factory,
+    get_model,
+    get_uefi_version,
 )
-
-# ---------------------------------------
-# ACPI TABLE HEADER
-# ---------------------------------------
 
 
 class TestAcpiTableHeader:
@@ -70,12 +77,6 @@ class TestAcpiTableHeader:
         assert xml.get("Signature") == "TEST"
         assert xml.get("Length") == "0x2C"
 
-
-# ---------------------------------------
-# FW BASIC BOOT PERFORMANCE RECORD
-# ---------------------------------------
-
-
 class TestFwBasicBootPerformanceRecord:
     @pytest.fixture
     def record_bytes(self):
@@ -102,12 +103,6 @@ class TestFwBasicBootPerformanceRecord:
         xml = rec.to_xml()
         assert xml.tag == "FwBasicBootPerformanceRecord"
         assert xml.get("FBPTPointer") == "0xABCDEF1234567890"
-
-
-# ---------------------------------------
-# FBPT TABLE HEADER
-# ---------------------------------------
-
 
 class TestFwBasicBootPerformanceTableHeader:
     @pytest.fixture
@@ -583,6 +578,82 @@ class TestDualGuidStringEventRecord:
         assert xml.find("String").attrib["Value"] == "BootMsg"
 
 
+class TestGuidQwordEventRecord:
+    @pytest.fixture
+    def sample_bytes(self):
+        # Use dummy values for all fields
+        values = (
+            0x1234,       # progress_id (H)
+            0x56789ABC,   # apic_id (I)
+            0x123456789ABCDEF0,  # timestamp (Q)
+            0xDEADBEEF,   # guid_uint32 (I)
+            0xCAFE,       # guid_uint16_0 (H)
+            0xBABE,       # guid_uint16_1 (H)
+            0x01, 0x02, 0x03, 0x04,  # guid_uint8_0 to _3 (B)
+            0x05, 0x06, 0x07, 0x08,  # guid_uint8_4 to _7 (B)
+            0x0FEDCBA987654321       # qword (Q)
+        )
+        packed = struct.pack(GuidQwordEventRecord.struct_format, *values)
+        return packed
+
+    def test_guid_qword_event_record_fields(self, mock_header, sample_bytes):
+        record = GuidQwordEventRecord(mock_header, sample_bytes)
+
+        assert record.progress_id == 0x1234
+        assert record.apic_id == 0x56789ABC
+        assert record.timestamp == 0x123456789ABCDEF0
+        assert record.guid_uint32 == 0xDEADBEEF
+        assert record.guid_uint16_0 == 0xCAFE
+        assert record.guid_uint16_1 == 0xBABE
+        assert record.guid_uint8_0 == 0x01
+        assert record.guid_uint8_1 == 0x02
+        assert record.guid_uint8_2 == 0x03
+        assert record.guid_uint8_3 == 0x04
+        assert record.guid_uint8_4 == 0x05
+        assert record.guid_uint8_5 == 0x06
+        assert record.guid_uint8_6 == 0x07
+        assert record.guid_uint8_7 == 0x08
+        assert record.qword == 0x0FEDCBA987654321
+
+    def test_guid_qword_event_record_str(self, mock_header, sample_bytes):
+        record = GuidQwordEventRecord(mock_header, sample_bytes)
+        result = str(record)
+
+        assert "Progress ID : 0x1234" in result
+        assert "Apic ID     : 0x56789ABC" in result
+        assert "Timestamp   : 0x123456789ABCDEF0" in result
+        assert "GUID        : DEADBEEF-CAFE-BABE-0102030405060708" in result
+        assert "Qword       : 0x0FEDCBA987654321" in result
+        assert "MockHeader" in result
+
+    def test_guid_qword_event_record_to_xml(self, mock_header, sample_bytes):
+        record = GuidQwordEventRecord(mock_header, sample_bytes)
+        xml = record.to_xml()
+
+        assert xml.tag == "MockHeader"
+
+        progress_id = xml.find("ProgressID")
+        assert progress_id is not None
+        assert progress_id.attrib["Value"] == "0x1234"
+
+        apic_id = xml.find("ApicID")
+        assert apic_id is not None
+        assert apic_id.attrib["Value"] == "0x56789ABC"
+
+        timestamp = xml.find("Timestamp")
+        assert timestamp is not None
+        assert timestamp.attrib["RawValue"] == "0x123456789ABCDEF0"
+        assert float(timestamp.attrib["ValueInMilliseconds"]) == pytest.approx(0x123456789ABCDEF0 / 1_000_000.0, rel=1e-9)
+
+        guid = xml.find("GUID")
+        assert guid is not None
+        assert guid.attrib["Value"] == "DEADBEEF-CAFE-BABE-0102030405060708"
+
+        qword = xml.find("Qword")
+        assert qword is not None
+        assert qword.attrib["Value"] == "0xFEDCBA987654321"
+
+
 class TestGuidQwordStringEventRecord:
     def test_parses_all_fields_and_string(self, mock_header):
         progress_id = 0x1234
@@ -714,3 +785,192 @@ class TestGuidQwordStringEventRecord:
         assert xml.find("GUID").attrib["Value"] == "00000004-0005-0006-0708090A0B0C0D0E"
         assert xml.find("Qword").attrib["Value"] == "0xF0F0F0F0F0F0F0F0"
         assert xml.find("String").attrib["Value"] == "Phase"
+
+class TestSystemFirmwareTable:
+
+    # mock init
+    @pytest.fixture
+    def system_firmware_table(self):
+            with patch.object(SystemFirmwareTable, '__init__', return_value=None):
+                instance = SystemFirmwareTable()
+                return instance
+
+    
+    def test_get_system_firmware_table_is_none(self, system_firmware_table):
+        system_firmware_table._get_system_firmware_table = None
+        error_code, table_data, msg = system_firmware_table.get_acpi_table(b"TEST")
+        assert error_code == -20
+        assert table_data is None
+        assert msg == "GetSystemFirmwareTable is None"
+
+    def test_get_acpi_table_equal_lengths(self, system_firmware_table):
+        mock_get_table = Mock(side_effect=[1200, 1200])
+        system_firmware_table._get_system_firmware_table = mock_get_table
+
+        with patch("ctypes.windll.kernel32.GetLastError", return_value=0), \
+            patch("ctypes.WinError", return_value="WinErrorMock"):
+            error_code, table_data, msg = system_firmware_table.get_acpi_table(b"FACP")
+        
+        assert error_code == 0
+        assert table_data is None
+        assert msg == 'Length = 0'
+        assert mock_get_table.call_count == 2
+
+    def test_get_acpi_table_length_mismatch(self, system_firmware_table):
+        mock_get_table = Mock(side_effect=[1200, 800])  # mismatch between length and length2
+        system_firmware_table._get_system_firmware_table = mock_get_table
+
+        with patch("ctypes.windll.kernel32.GetLastError", return_value=1234), \
+            patch("ctypes.WinError", return_value="WinErrorMock") as mock_win_error:
+            error_code, table_data, msg = system_firmware_table.get_acpi_table(b"FACP")
+
+        assert error_code == 1234
+        assert table_data is None
+
+    def test_get_acpi_table_length_less_than_1000(self, system_firmware_table):
+        mock_get_table = Mock(side_effect=[1200, 1200])
+        system_firmware_table._get_system_firmware_table = mock_get_table
+
+        with patch("ctypes.windll.kernel32.GetLastError", return_value=0), \
+            patch("ctypes.WinError", return_value="WinErrorMock"):
+            error_code, table_data, msg = system_firmware_table.get_acpi_table(b"FACP")
+        
+        assert error_code == 0
+        assert table_data is None
+        assert msg == 'Length = 0'
+        assert mock_get_table.call_count == 2
+
+    def test_get_acpi_table_fixed_length(self, system_firmware_table):
+        system_firmware_table._get_system_firmware_table = Mock(return_value=500)
+        error_code, table_data, msg = system_firmware_table.get_acpi_table(b"TEST")
+        assert error_code == 0
+        assert isinstance(table_data, bytes)
+        assert len(table_data) == 500
+        assert msg is None
+
+    def test_get_fbpt_nonzero_status(self, system_firmware_table):
+        system_firmware_table._nt_query_system_information = Mock(return_value=1234)
+        status, param1 = system_firmware_table.get_fbpt()
+        assert status == 1
+        assert param1 is None
+
+    def test_get_fbpt_success(self, system_firmware_table):
+        system_firmware_table._nt_query_system_information = Mock(side_effect=[0xC0000004, 0])
+        status, param1 = system_firmware_table.get_fbpt()
+        assert status == 0
+
+    @pytest.mark.parametrize(
+        "record_type,record_class",
+        [
+            (FIRMWARE_BASIC_BOOT_PERFORMANCE_DATA_EVENT_TYPE, FwBasicBootPerformanceDataRecord),
+            (GUID_EVENT_TYPE, GuidEventRecord),
+            (GUID_QWORD_EVENT_TYPE, GuidQwordEventRecord),
+            (FPDT_GUID_QWORD_EVENT_TYPE, GuidQwordEventRecord),
+        ],
+    )
+    def test_fbpt_parsing_factory_nonstring_record_types(self, record_type, record_class):
+        record_length = FbptRecordHeader.size + record_class.size
+        revision = 1
+
+        mock_header_bytes = (
+            record_type.to_bytes(2, "little") +
+            record_length.to_bytes(1, "little") +
+            revision.to_bytes(1, "little")
+        )
+
+        mock_record_bytes = b"\x01" * (record_class.size)
+        eof = b""
+        read_sequence = [mock_header_bytes, mock_record_bytes, eof]
+
+        # Mock file and perform parsing
+        mock_file = Mock()
+        mock_file.read = Mock(side_effect=read_sequence)
+
+        records_list = []
+        result = fbpt_parsing_factory(mock_file, records_list)
+
+        # Assertions
+        assert result == 0
+        assert len(records_list) == 1
+        assert isinstance(records_list[0], record_class)
+        assert records_list[0].header.performance_record_type == record_type
+
+    @pytest.mark.parametrize(
+        "record_type,record_class",
+        [
+            (DYNAMIC_STRING_EVENT_TYPE, DynamicStringEventRecord),
+            (FPDT_DYNAMIC_STRING_EVENT_TYPE, DynamicStringEventRecord),
+            (DUAL_GUID_STRING_EVENT_TYPE, DualGuidStringEventRecord),
+            (FPDT_DUAL_GUID_STRING_EVENT_TYPE, DualGuidStringEventRecord),
+            (GUID_QWORD_STRING_EVENT_TYPE, GuidQwordStringEventRecord),
+            (FPDT_GUID_QWORD_STRING_EVENT_TYPE, GuidQwordStringEventRecord),
+        ],
+    )
+    def test_fbpt_parsing_factory_all_record_types(self, record_type, record_class):
+        record_size = record_class.size
+        record_length = FbptRecordHeader.size + record_size + 5 # 4 = string size
+        mock_header_bytes = (
+            record_type.to_bytes(2, "little") +
+            record_length.to_bytes(1, "little") +
+            (1).to_bytes(1, "little")
+        )
+        mock_record_bytes = b"\x01" * record_size
+
+        string_data = b"TEST\x00"
+        string_size = (4).to_bytes(4, "little")
+        read_sequence = [mock_header_bytes, mock_record_bytes, string_data, b""]
+
+        mock_file = Mock()
+        mock_file.read = Mock(side_effect=read_sequence)
+        records_list = []
+
+        result = fbpt_parsing_factory(mock_file, records_list)
+
+        assert result == 0
+        assert len(records_list) == 1
+        assert isinstance(records_list[0], record_class)
+        assert records_list[0].header.performance_record_type == record_type
+
+class TestGetUefiVersionGetModel:
+
+    # mock wmi
+    @pytest.fixture
+    def mock_wmi(self):
+        mock_wmi = types.ModuleType("wmi")
+        return mock_wmi
+
+
+    def test_get_uefi_version_success_and_failure(self, mock_wmi):
+        mock_bios = MagicMock()
+        mock_bios.SMBIOSBIOSVersion = "UEFI-TEST-VERSION"
+        mock_WMI_instance = MagicMock()
+        mock_WMI_instance.Win32_BIOS.return_value = [mock_bios]
+        mock_wmi.WMI = MagicMock(return_value=mock_WMI_instance)
+        with patch.dict(sys.modules, {"wmi": mock_wmi}):
+            result = get_uefi_version()
+            assert result == "UEFI-TEST-VERSION"
+
+        mock_wmi.WMI = MagicMock(side_effect=Exception("Simulated failure"))
+        with patch.dict(sys.modules, {"wmi": mock_wmi}):
+            result = get_uefi_version()
+            assert result == "Unknown"
+
+    def test_get_model_success_and_failure(self, mock_wmi):
+        mock_wmi = types.ModuleType("wmi")
+        mock_model = MagicMock()
+        mock_model.Model = "TestModel123"
+        mock_wmi.WMI = MagicMock(return_value=MagicMock(Win32_ComputerSystem=MagicMock(return_value=[mock_model])))
+
+        with patch.dict(sys.modules, {"wmi": mock_wmi}):
+            result = get_model()
+            assert result == "TestModel123"
+
+    def test_get_model_failure(self, mock_wmi):
+        # Simulate a failure in wmi.WMI
+        mock_wmi = types.ModuleType("wmi")
+        mock_wmi.WMI = MagicMock(side_effect=Exception("Simulated WMI failure"))
+
+        with patch.dict(sys.modules, {"wmi": mock_wmi}):
+            result = get_model()
+            assert result == "Unknown"
+
