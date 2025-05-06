@@ -1441,6 +1441,10 @@ class ParserApp:
         )
         self.options = parser.parse_args()
         self.text_log = self.handle_output_file()
+        self.uefi_version, self.model = self.get_uefi_version_model()
+
+        self.write_text_header()
+        self.xml_tree = self.write_xml_header()
 
     def set_up_logging(self):
         logger = logging.getLogger("")
@@ -1464,205 +1468,158 @@ class ParserApp:
             else:
                 text_log = open(self.options.output_text_file, "w")
                 return text_log
+            
+    def handle_input_file(self):
+        if self.options.input_fbpt_bin:
+            if len(self.options.input_fbpt_bin) < 2:
+                logging.critical("The input binary file parameter is invalid")
+                raise ValueError("Input file name must be at least 2 characters long")
+            if not os.path.isfile(self.options.input_fbpt_bin):
+                logging.critical("The input binary file is not found")
+                ValueError("Invalid input file path")
+    
+    def get_uefi_version_model(self):
+        if self.options.input_fbpt_bin is None:
+            uefi_version = get_uefi_version()
+            model = get_model()
+        else:
+            p = re.compile(r"FBPT_([\w ]*)_([\d\.]*)\.bin")
+            m = p.match(os.path.split(self.options.input_fbpt_bin)[1])
+            if m is not None:
+                uefi_version = m.group(1)
+                model = m.group(2)
+            else:
+                logging.critical("The binary file name doesn't contain model name and UEFI version")
+                logging.critical("Tool expects binary name in format FBPT_<ModelName>_<UefiVer>.bin")
+                logging.critical("Continuing with N/A for model name and UEFI version")
+                uefi_version = "N/A"
+                model = "N/A"
+        return (uefi_version, model)
+    
+    def write_text_header(self):
+        if self.options.output_text_file:
+            self.text_log.write(
+                f"  Platform Information\n------------------------------------------------------------------\n"
+                f"UEFI Version : {self.uefi_version}\n  Model        : {self.model}\n"
+            )
+    
+    def write_xml_header(self):
+        if self.options.output_xml_file:
+            xml_tree = ET.Element("FpdtParserData")
+            xml_repr = ET.Element("UEFIVersion")
+            xml_repr.set("Value", self.uefi_version)
+            xml_tree.append(xml_repr)
+
+            xml_repr = ET.Element("Model")
+            xml_repr.set("Value", self.model)
+            xml_tree.append(xml_repr)
+
+            date_collected = f"{datetime.datetime.now().month}/{datetime.datetime.now().day}/{datetime.datetime.now().year}"
+            xml_repr = ET.Element("DateCollected")
+            xml_repr.set("Value", date_collected)
+            xml_tree.append(xml_repr)
+
+            xml_repr = ET.Element("FpdtParserVersion")
+            xml_repr.set("Value", FPDT_PARSER_VER)
+            xml_tree.append(xml_repr)
+            return xml_tree
+
+
+    def write_fpdt_header(self, table):
+        if self.options.input_fbpt_bin is None:
+            (error_code, data, error_string) = table.get_acpi_table(b"FPDT")
+            fpdt_header = AcpiTableHeader(data)
+
+            # Store FPDT header in text and/or XML tree
+            if self.options.output_text_file:
+                self.text_log.write(str(fpdt_header))
+            if self.options.output_xml_file:
+                self.xml_tree.append(fpdt_header.to_xml())
+
+            # This assumes we only have one perf record - Firmware Basic Boot Performance Record
+            if (fpdt_header.length - AcpiTableHeader.size) > FwBasicBootPerformanceRecord.size:
+                logging.critical("Extra records are present in FPDT but will be ignored")
+
+            # Parse the basic boot perf record
+            fbbpr = FwBasicBootPerformanceRecord(data[AcpiTableHeader.size :])
+
+            # Store the basic boot perf record in text and/or XML tree
+            if self.options.output_text_file:
+                self.text_log.write(str(fbbpr))
+            if self.options.output_xml_file:
+                self.xml_tree.append(fbbpr.to_xml())
+
+        def find_fbpt_file(self, table):
+            if self.options.input_fbpt_bin is None:
+                (return_code, fbpt_buffer) = table.get_fbpt()
+
+                if return_code != 0:
+                    logging.critical(r"This version of Windows doesn't support access to FBPT - aborting")
+                    raise EnvironmentError("Unsupported platform: cannot access FBPT") 
+                else:
+                    # get_fbpt returned expected return_code, so let's use the buffer it returned
+                    fbpt_file_w = open("FBPT.BIN", "wb")
+                    fbpt_file_w.write(fbpt_buffer)
+                    fbpt_file_w.close()
+                    fbpt_file = open("FBPT.BIN", "rb")
+            else:
+                fbpt_file = open(self.options.input_fbpt_bin, "rb")
+            return fbpt_file
+        
+        def write_fbpt(self, fbpt_file):
+            fbpt_header = FwBasicBootPerformanceTableHeader(fbpt_file.read(FwBasicBootPerformanceTableHeader.size))
+            # Store header into text log and/or XML tree
+            if self.options.output_text_file:
+                self.text_log.write(str(fbpt_header))
+            if self.options.output_xml_file:
+                # Store FBPT header and records under a separate element under FPDT
+                fbpt_tree = fbpt_header.to_xml()
+                self.xml_tree.append(fbpt_tree)
+
+            
+        def gather_fbpt_records(self, fbpt_file):
+            fbpt_records_list = list()
+
+            # This helper function parses through the FBPT records and populates the list with records
+            fbpt_parse_result = fbpt_parsing_factory(fbpt_file, fbpt_records_list)
+
+            fbpt_file.close()
+            if self.options.input_fbpt_bin is None:
+                os.remove("FBPT.BIN")
+
+            if fbpt_parse_result == 1:
+                if self.options.output_text_file:
+                    self.text_log.close()
+                logging.shutdown()
+                raise ValueError("Failed to parse FBPT: binary data is malformed or unsupported")
+
+            return fbpt_parse_result
+
+        def write_records(self, fbpt_records_list):
+            if self.options.output_xml_file:
+                for record in fbpt_records_list:
+                    self.fbpt_tree.append(record.to_xml())
+
+                with open(self.options.output_xml_file, "wb") as xml_file:
+                    xml_file.write(ET.tostring(self.xml_tree))
+
+            if self.options.output_text_file:
+                for record in fbpt_records_list:
+                    self.text_log.write(str(record))
+                self.text_log.write(f"\nFBPT Record count: {len(fbpt_records_list)}\n")
+                self.text_log.close()
+            
+            return len(fbpt_records_list)
 
 
 def main() -> None:
     """Main function to execute the script."""
-    #
-    # 1. Setup: command line args, logger, cleanup before we start, create the text file log, create
-    #    XML tree with UEFI version and model
-    #
+    parser_app = ParserApp()
+    parser_app.set_up_logging()
+    parser_app.handle_input_file()
+    parser_app.handle_output_file()
+    table = SystemFirmwareTable()
 
-    # Set up command line arguments
-    parser = argparse.ArgumentParser(description="FPDT Parser Tool")
-    parser.add_argument(
-        "-t",
-        "--output_text",
-        dest="output_text_file",
-        help="Name of the output text file which will contain the FPDT info",
-        default=None,
-    )
-    parser.add_argument(
-        "-x",
-        "--output_xml",
-        dest="output_xml_file",
-        help="Name of the output XML file which will contain the FPDT info",
-        default=None,
-    )
-    parser.add_argument(
-        "-b",
-        "--input_bin",
-        dest="input_fbpt_bin",
-        help="Name of the input binary file which contains the FBPT",
-        default=None,
-    )
-    options = parser.parse_args()
-
-    # Set up logging
-    logger = logging.getLogger("")
-    logger.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(levelname)s - %(message)s")
-    console = logging.StreamHandler()
-    console.setLevel(logging.CRITICAL)
-    console.setFormatter(formatter)
-    logger.addHandler(console)
-
-    if options.output_xml_file:
-        if len(options.output_xml_file) < 2:
-            logging.critical("The output XML file parameter is invalid")
-            sys.exit(1)
-
-    if options.output_text_file:
-        if len(options.output_text_file) < 2:
-            logging.critical("The output text file parameter is invalid")
-            sys.exit(1)
-        else:
-            # Create a new text log file
-            text_log = open(options.output_text_file, "w")
-
-    if options.input_fbpt_bin:
-        if len(options.input_fbpt_bin) < 2:
-            logging.critical("The input binary file parameter is invalid")
-            sys.exit(1)
-        if not os.path.isfile(options.input_fbpt_bin):
-            logging.critical("The input binary file is not found")
-            sys.exit(1)
-
-    # Get UEFI version and model, print and/or store in XML
-    if options.input_fbpt_bin is None:
-        uefi_version = get_uefi_version()
-        model = get_model()
-    else:
-        p = re.compile(r"FBPT_([\w ]*)_([\d\.]*)\.bin")
-        m = p.match(os.path.split(options.input_fbpt_bin)[1])
-        if m is not None:
-            uefi_version = m.group(1)
-            model = m.group(2)
-        else:
-            logging.critical("The binary file name doesn't contain model name and UEFI version")
-            logging.critical("Tool expects binary name in format FBPT_<ModelName>_<UefiVer>.bin")
-            logging.critical("Continuing with N/A for model name and UEFI version")
-            uefi_version = "N/A"
-            model = "N/A"
-
-    if options.output_text_file:
-        text_log.write(
-            f"  Platform Information\n------------------------------------------------------------------\n"
-            f"UEFI Version : {uefi_version}\n  Model        : {model}\n"
-        )
-    if options.output_xml_file:
-        xml_tree = ET.Element("FpdtParserData")
-        xml_repr = ET.Element("UEFIVersion")
-        xml_repr.set("Value", uefi_version)
-        xml_tree.append(xml_repr)
-
-        xml_repr = ET.Element("Model")
-        xml_repr.set("Value", model)
-        xml_tree.append(xml_repr)
-
-        date_collected = f"{datetime.datetime.now().month}/{datetime.datetime.now().day}/{datetime.datetime.now().year}"
-        xml_repr = ET.Element("DateCollected")
-        xml_repr.set("Value", date_collected)
-        xml_tree.append(xml_repr)
-
-        xml_repr = ET.Element("FpdtParserVersion")
-        xml_repr.set("Value", FPDT_PARSER_VER)
-        xml_tree.append(xml_repr)
-
-    #
-    # 2. Inspect FPDT: header and the basic boot perf record in it, if relevant log both in XML and/or in text
-    #
-    if options.input_fbpt_bin is None:
-        table = SystemFirmwareTable()
-        (error_code, data, error_string) = table.get_acpi_table(b"FPDT")
-        fpdt_header = AcpiTableHeader(data)
-
-        # Store FPDT header in text and/or XML tree
-        if options.output_text_file:
-            text_log.write(str(fpdt_header))
-        if options.output_xml_file:
-            xml_tree.append(fpdt_header.to_xml())
-
-        # This assumes we only have one perf record - Firmware Basic Boot Performance Record
-        if (fpdt_header.length - AcpiTableHeader.size) > FwBasicBootPerformanceRecord.size:
-            logging.critical("Extra records are present in FPDT but will be ignored")
-
-        # Parse the basic boot perf record
-        fbbpr = FwBasicBootPerformanceRecord(data[AcpiTableHeader.size :])
-
-        # Store the basic boot perf record in text and/or XML tree
-        if options.output_text_file:
-            text_log.write(str(fbbpr))
-        if options.output_xml_file:
-            xml_tree.append(fbbpr.to_xml())
-
-    #
-    # 3. Read FBPT. Parse its header and the contents.
-    #
-    if options.input_fbpt_bin is None:
-        (return_code, fbpt_buffer) = table.get_fbpt()
-
-        if return_code != 0:
-            logging.critical(r"This version of Windows doesn't support access to FBPT - aborting")
-            sys.exit(1)
-        else:
-            # get_fbpt returned expected return_code, so let's use the buffer it returned
-            fbpt_file_w = open("FBPT.BIN", "wb")
-            fbpt_file_w.write(fbpt_buffer)
-            fbpt_file_w.close()
-            fbpt_file = open("FBPT.BIN", "rb")
-    else:
-        fbpt_file = open(options.input_fbpt_bin, "rb")
-
-    fbpt_header = FwBasicBootPerformanceTableHeader(fbpt_file.read(FwBasicBootPerformanceTableHeader.size))
-    # Store header into text log and/or XML tree
-    if options.output_text_file:
-        text_log.write(str(fbpt_header))
-    if options.output_xml_file:
-        # Store FBPT header and records under a separate element under FPDT
-        fbpt_tree = fbpt_header.to_xml()
-        xml_tree.append(fbpt_tree)
-
-    #
-    # 4. Parse the FBPT records and store record objects into the list
-    #
-
-    fbpt_records_list = list()
-
-    # This helper function parses through the FBPT records and populates the list with records
-    fbpt_parse_result = fbpt_parsing_factory(fbpt_file, fbpt_records_list)
-
-    fbpt_file.close()
-    if options.input_fbpt_bin is None:
-        os.remove("FBPT.BIN")
-
-    if fbpt_parse_result == 1:
-        if options.output_text_file:
-            text_log.close()
-        logging.shutdown()
-        sys.exit(1)
-
-    #
-    # 5. Iterate over the records list to store records into the XML tree and then an XML file,
-    #    store into text log if specified via args
-    #
-
-    if options.output_xml_file:
-        for record in fbpt_records_list:
-            fbpt_tree.append(record.to_xml())
-
-        with open(options.output_xml_file, "wb") as xml_file:
-            xml_file.write(ET.tostring(xml_tree))
-
-    if options.output_text_file:
-        for record in fbpt_records_list:
-            text_log.write(str(record))
-        text_log.write(f"\nFBPT Record count: {len(fbpt_records_list)}\n")
-        text_log.close()
-
-    #
-    # 6. Finish: Print success, turn off logging, exit with 0
-    #
 
     logging.critical(f"SUCCESS, {len(fbpt_records_list)} record(s) parsed")
     logging.shutdown()
