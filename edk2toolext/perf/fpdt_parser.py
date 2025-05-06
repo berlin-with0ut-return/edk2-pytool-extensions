@@ -1440,7 +1440,9 @@ class ParserApp:
             default=None,
         )
         self.options = parser.parse_args()
+        self.set_up_logging()
         self.text_log = self.handle_output_file()
+        self.handle_input_file()
         self.uefi_version, self.model = self.get_uefi_version_model()
 
         self.write_text_header()
@@ -1615,13 +1617,14 @@ class ParserApp:
 def main() -> None:
     """Main function to execute the script."""
     parser_app = ParserApp()
-    parser_app.set_up_logging()
-    parser_app.handle_input_file()
-    parser_app.handle_output_file()
     table = SystemFirmwareTable()
+    parser_app.write_fpdt_header(table)
+    fbpt_file = parser_app.find_fbpt_file(table)
+    parser_app.write_fbpt(fbpt_file)
+    fbpt_parse_result = parser_app.gather_fbpt_records(fbpt_file)
+    records_parsed = parser_app.write_records(fbpt_parse_result)
 
-
-    logging.critical(f"SUCCESS, {len(fbpt_records_list)} record(s) parsed")
+    logging.critical(f"SUCCESS, {records_parsed} record(s) parsed")
     logging.shutdown()
     sys.exit(0)
 
