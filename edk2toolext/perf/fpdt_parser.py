@@ -65,7 +65,16 @@ import re
 import struct
 import sys
 import xml.etree.ElementTree as ET
-from ctypes import POINTER, WinError, c_int, c_ulong, c_void_p, create_string_buffer, pointer, windll
+from ctypes import (
+    POINTER,
+    WinError,
+    c_int,
+    c_ulong,
+    c_void_p,
+    create_string_buffer,
+    pointer,
+    windll,
+)
 from typing import BinaryIO
 
 FPDT_PARSER_VER = "3.00"
@@ -211,7 +220,9 @@ class FwBasicBootPerformanceRecord(object):
             self.revision,
             self.reserved,
             self.fbpt_pointer,
-        ) = struct.unpack_from(FwBasicBootPerformanceRecord.struct_format, record_byte_array)
+        ) = struct.unpack_from(
+            FwBasicBootPerformanceRecord.struct_format, record_byte_array
+        )
 
     def __str__(self) -> str:
         """Generate a string representation of the object.
@@ -324,8 +335,8 @@ class FbptRecordHeader(object):
         Args:
             header_byte_array (bytes): A byte array containing the header data to be parsed.
         """
-        (self.performance_record_type, self.record_length, self.revision) = struct.unpack_from(
-            FbptRecordHeader.struct_format, header_byte_array
+        (self.performance_record_type, self.record_length, self.revision) = (
+            struct.unpack_from(FbptRecordHeader.struct_format, header_byte_array)
         )
 
     def __str__(self) -> str:
@@ -348,7 +359,10 @@ class FbptRecordHeader(object):
         Returns:
             ET.Element: An XML element containing the serialized data of the object.
         """
-        if self.performance_record_type == FIRMWARE_BASIC_BOOT_PERFORMANCE_DATA_EVENT_TYPE:
+        if (
+            self.performance_record_type
+            == FIRMWARE_BASIC_BOOT_PERFORMANCE_DATA_EVENT_TYPE
+        ):
             xml_repr = ET.Element("FirmwareBasicBootPerformanceEvent")
         elif self.performance_record_type == GUID_EVENT_TYPE:
             xml_repr = ET.Element("GuidEvent")
@@ -404,7 +418,9 @@ class FwBasicBootPerformanceDataRecord(object):
     struct_format = "=IQQQQQ"
     size = struct.calcsize(struct_format)
 
-    def __init__(self, record_header: FbptRecordHeader, contents_byte_array: bytes) -> None:
+    def __init__(
+        self, record_header: FbptRecordHeader, contents_byte_array: bytes
+    ) -> None:
         """Initializes an instance of the FwBasicBootPerformanceDataRecord class.
 
         Args:
@@ -419,7 +435,9 @@ class FwBasicBootPerformanceDataRecord(object):
             self.os_loader_start_image_start,
             self.exit_boot_services_entry,
             self.exit_boot_services_exit,
-        ) = struct.unpack_from(FwBasicBootPerformanceDataRecord.struct_format, contents_byte_array)
+        ) = struct.unpack_from(
+            FwBasicBootPerformanceDataRecord.struct_format, contents_byte_array
+        )
 
     def __str__(self) -> str:
         """Generate a string representation of the object.
@@ -452,23 +470,41 @@ class FwBasicBootPerformanceDataRecord(object):
         reset_end_xml.set("RawValue", f"0x{self.reset_end:X}")
         reset_end_xml.set("ValueInMilliseconds", f"{self.reset_end / 1000000.0:.6f}")
 
-        os_loader_load_image_start_xml = ET.SubElement(xml_repr, "OSLoaderLoadImageStart")
-        os_loader_load_image_start_xml.set("RawValue", f"0x{self.os_loader_load_image_start:X}")
-        os_loader_load_image_start_xml.set("ValueInMilliseconds", f"{self.os_loader_load_image_start / 1000000.0:.6f}")
+        os_loader_load_image_start_xml = ET.SubElement(
+            xml_repr, "OSLoaderLoadImageStart"
+        )
+        os_loader_load_image_start_xml.set(
+            "RawValue", f"0x{self.os_loader_load_image_start:X}"
+        )
+        os_loader_load_image_start_xml.set(
+            "ValueInMilliseconds", f"{self.os_loader_load_image_start / 1000000.0:.6f}"
+        )
 
-        os_loader_start_image_start_xml = ET.SubElement(xml_repr, "OSLoaderStartImageStart")
-        os_loader_start_image_start_xml.set("RawValue", f"0x{self.os_loader_start_image_start:X}")
+        os_loader_start_image_start_xml = ET.SubElement(
+            xml_repr, "OSLoaderStartImageStart"
+        )
+        os_loader_start_image_start_xml.set(
+            "RawValue", f"0x{self.os_loader_start_image_start:X}"
+        )
         os_loader_start_image_start_xml.set(
             "ValueInMilliseconds", f"{self.os_loader_start_image_start / 1000000.0:.6f}"
         )
 
         exit_boot_services_entry_xml = ET.SubElement(xml_repr, "ExitBootServicesEntry")
-        exit_boot_services_entry_xml.set("RawValue", f"0x{self.exit_boot_services_entry:X}")
-        exit_boot_services_entry_xml.set("ValueInMilliseconds", f"{self.exit_boot_services_entry / 1000000.0:.6f}")
+        exit_boot_services_entry_xml.set(
+            "RawValue", f"0x{self.exit_boot_services_entry:X}"
+        )
+        exit_boot_services_entry_xml.set(
+            "ValueInMilliseconds", f"{self.exit_boot_services_entry / 1000000.0:.6f}"
+        )
 
         exit_boot_services_exit_xml = ET.SubElement(xml_repr, "ExitBootServicesExit")
-        exit_boot_services_exit_xml.set("RawValue", f"0x{self.exit_boot_services_exit:X}")
-        exit_boot_services_exit_xml.set("ValueInMilliseconds", f"{self.exit_boot_services_exit / 1000000.0:.6f}")
+        exit_boot_services_exit_xml.set(
+            "RawValue", f"0x{self.exit_boot_services_exit:X}"
+        )
+        exit_boot_services_exit_xml.set(
+            "ValueInMilliseconds", f"{self.exit_boot_services_exit / 1000000.0:.6f}"
+        )
 
         return xml_repr
 
@@ -487,7 +523,9 @@ class GuidEventRecord(object):
     struct_format = "=HIQIHHBBBBBBBB"
     size = struct.calcsize(struct_format)
 
-    def __init__(self, record_header: FbptRecordHeader, contents_byte_array: bytes) -> None:
+    def __init__(
+        self, record_header: FbptRecordHeader, contents_byte_array: bytes
+    ) -> None:
         """Initializes a GuidEventRecord instance.
 
         Args:
@@ -612,7 +650,11 @@ class DynamicStringEventRecord(object):
     size = struct.calcsize(struct_format)
 
     def __init__(
-        self, record_header: FbptRecordHeader, contents_byte_array: bytes, string_byte_array: bytes, string_size: int
+        self,
+        record_header: FbptRecordHeader,
+        contents_byte_array: bytes,
+        string_byte_array: bytes,
+        string_size: int,
     ) -> None:
         """Initializes a DynamicStringEventRecord instance.
 
@@ -640,13 +682,20 @@ class DynamicStringEventRecord(object):
             self.guid_uint8_5,
             self.guid_uint8_6,
             self.guid_uint8_7,
-        ) = struct.unpack_from(DynamicStringEventRecord.struct_format, contents_byte_array)
+        ) = struct.unpack_from(
+            DynamicStringEventRecord.struct_format, contents_byte_array
+        )
         try:
             self.string = self.string[: self.string.index(b"\x00")]
         except ValueError:
-            logging.critical("String in a Dynamic String Record does not contain a null terminator")
+            logging.critical(
+                "String in a Dynamic String Record does not contain a null terminator"
+            )
         self.string = "".join(
-            [i if ((ord(i) == 0) or ((ord(i) > 31) and (ord(i) < 127))) else "?" for i in self.string.decode("ascii")]
+            [
+                i if ((ord(i) == 0) or ((ord(i) > 31) and (ord(i) < 127))) else "?"
+                for i in self.string.decode("ascii")
+            ]
         )
 
     def __str__(self) -> str:
@@ -736,7 +785,11 @@ class DualGuidStringEventRecord(object):
     size = struct.calcsize(struct_format)
 
     def __init__(
-        self, record_header: FbptRecordHeader, contents_byte_array: bytes, string_byte_array: bytes, string_size: int
+        self,
+        record_header: FbptRecordHeader,
+        contents_byte_array: bytes,
+        string_byte_array: bytes,
+        string_size: int,
     ) -> None:
         """Initializes a DualGuidStringEventRecord instance.
 
@@ -775,13 +828,20 @@ class DualGuidStringEventRecord(object):
             self.guid2_uint8_5,
             self.guid2_uint8_6,
             self.guid2_uint8_7,
-        ) = struct.unpack_from(DualGuidStringEventRecord.struct_format, contents_byte_array)
+        ) = struct.unpack_from(
+            DualGuidStringEventRecord.struct_format, contents_byte_array
+        )
         try:
             self.string = self.string[: self.string.index(b"\x00")]
         except ValueError:
-            logging.critical("String in a Dual GUID String Record does not contain a null terminator")
+            logging.critical(
+                "String in a Dual GUID String Record does not contain a null terminator"
+            )
         self.string = "".join(
-            [i if ((ord(i) == 0) or ((ord(i) > 31) and (ord(i) < 127))) else "?" for i in self.string.decode("ascii")]
+            [
+                i if ((ord(i) == 0) or ((ord(i) > 31) and (ord(i) < 127))) else "?"
+                for i in self.string.decode("ascii")
+            ]
         )
 
     def __str__(self) -> str:
@@ -896,7 +956,9 @@ class GuidQwordEventRecord(object):
     struct_format = "=HIQIHHBBBBBBBBQ"
     size = struct.calcsize(struct_format)
 
-    def __init__(self, record_header: FbptRecordHeader, contents_byte_array: bytes) -> None:
+    def __init__(
+        self, record_header: FbptRecordHeader, contents_byte_array: bytes
+    ) -> None:
         """Initializes a GuidQwordEventRecord instance.
 
         Args:
@@ -1002,7 +1064,11 @@ class GuidQwordStringEventRecord(object):
     size = struct.calcsize(struct_format)
 
     def __init__(
-        self, record_header: FbptRecordHeader, contents_byte_array: bytes, string_byte_array: bytes, string_size: int
+        self,
+        record_header: FbptRecordHeader,
+        contents_byte_array: bytes,
+        string_byte_array: bytes,
+        string_size: int,
     ) -> None:
         """Initializes a GuidQwordStringEventRecord instance.
 
@@ -1031,7 +1097,9 @@ class GuidQwordStringEventRecord(object):
             self.guid_uint8_6,
             self.guid_uint8_7,
             self.qword,
-        ) = struct.unpack_from(GuidQwordStringEventRecord.struct_format, contents_byte_array)
+        ) = struct.unpack_from(
+            GuidQwordStringEventRecord.struct_format, contents_byte_array
+        )
         # in case string has non-printable chars, let's replace those with '?'
         # first cut off garbage behind the null terminator
 
@@ -1039,7 +1107,10 @@ class GuidQwordStringEventRecord(object):
             self.string = self.string[: self.string.index(b"\x00")]
 
         self.string = "".join(
-            [i if ((ord(i) == 0) or ((ord(i) > 31) and (ord(i) < 127))) else "?" for i in self.string.decode("ascii")]
+            [
+                i if ((ord(i) == 0) or ((ord(i) > 31) and (ord(i) < 127))) else "?"
+                for i in self.string.decode("ascii")
+            ]
         )
 
     def __str__(self) -> str:
@@ -1129,12 +1200,16 @@ class SystemFirmwareTable:
         import win32security
 
         # Enable required SeSystemEnvironmentPrivilege privilege
-        privilege = win32security.LookupPrivilegeValue(None, "SeSystemEnvironmentPrivilege")
+        privilege = win32security.LookupPrivilegeValue(
+            None, "SeSystemEnvironmentPrivilege"
+        )
         token = win32security.OpenProcessToken(
             win32process.GetCurrentProcess(),
             win32security.TOKEN_READ | win32security.TOKEN_ADJUST_PRIVILEGES,
         )
-        win32security.AdjustTokenPrivileges(token, False, [(privilege, win32security.SE_PRIVILEGE_ENABLED)])
+        win32security.AdjustTokenPrivileges(
+            token, False, [(privilege, win32security.SE_PRIVILEGE_ENABLED)]
+        )
         win32api.CloseHandle(token)
 
         kernel32 = windll.kernel32
@@ -1189,24 +1264,32 @@ class SystemFirmwareTable:
         """
         err = 0  # Success
         table_type = struct.unpack(">i", b"ACPI")[0]  # Big endian
-        table_id_as_int = struct.unpack("<i", table_id)[0]  # TableId is little endian or native
+        table_id_as_int = struct.unpack("<i", table_id)[
+            0
+        ]  # TableId is little endian or native
         table_length = 1000
         table = create_string_buffer(table_length)
-        if self._get_system_firmware_table is not None: # mock
+        if self._get_system_firmware_table is not None:  # mock
             kernel32 = windll.kernel32
             logging.info(
                 f"Calling GetSystemFirmwareTable( fw_table_provider=0x{table_type:x},"
                 f" fw_table_id=0x{table_id_as_int:X} )"
             )
-            length = self._get_system_firmware_table(table_type, table_id_as_int, table, table_length) # mock
+            length = self._get_system_firmware_table(
+                table_type, table_id_as_int, table, table_length
+            )  # mock
             if length > table_length:
                 logging.info(f"Table length is: 0x{length:x}")
                 table = create_string_buffer(length)
-                length2 = self._get_system_firmware_table(table_type, table_id_as_int, table, length)
+                length2 = self._get_system_firmware_table(
+                    table_type, table_id_as_int, table, length
+                )
 
                 if length2 != length:
                     err = kernel32.GetLastError()
-                    logging.error(f"GetSystemFirmwareTable failed (GetLastError = 0x{err:x})")
+                    logging.error(
+                        f"GetSystemFirmwareTable failed (GetLastError = 0x{err:x})"
+                    )
                     logging.error(WinError())
                     return err, None, WinError(err)
             elif length != 0:
@@ -1281,8 +1364,12 @@ def fbpt_parsing_factory(fbpt_contents_file: BinaryIO, fbpt_records_list: list) 
 
         # If unknown record type print it and stop
         if fbpt_record_header.performance_record_type not in KNOWN_FBPT_RECORD_TYPES:
-            logging.critical(f"Unknown record type 0x{fbpt_record_header.performance_record_type:04x}")
-            fbpt_contents_file.read(fbpt_record_header.record_length - 4)  # subtracting 4, that's the header size
+            logging.critical(
+                f"Unknown record type 0x{fbpt_record_header.performance_record_type:04x}"
+            )
+            fbpt_contents_file.read(
+                fbpt_record_header.record_length - 4
+            )  # subtracting 4, that's the header size
 
         # Using the record type from the record header we will fill out a struct with the info from the record
         # and will print it
@@ -1292,78 +1379,111 @@ def fbpt_parsing_factory(fbpt_contents_file: BinaryIO, fbpt_records_list: list) 
         # DUAL_GUID_STRING_EVENT_TYPE
         # GUID_QWORD_EVENT_TYPE
         # GUID_QWORD_STRING_EVENT_TYPE
-        if fbpt_record_header.performance_record_type == FIRMWARE_BASIC_BOOT_PERFORMANCE_DATA_EVENT_TYPE:
-            print("here")
-            fw_basic_boot_performance_data_record_string: bytes = fbpt_contents_file.read(
-                FwBasicBootPerformanceDataRecord.size
+        if (
+            fbpt_record_header.performance_record_type
+            == FIRMWARE_BASIC_BOOT_PERFORMANCE_DATA_EVENT_TYPE
+        ):
+            fw_basic_boot_performance_data_record_string: bytes = (
+                fbpt_contents_file.read(FwBasicBootPerformanceDataRecord.size)
             )
-            fw_basic_boot_performance_data_record: FwBasicBootPerformanceDataRecord = FwBasicBootPerformanceDataRecord(
-                fbpt_record_header, fw_basic_boot_performance_data_record_string
+            fw_basic_boot_performance_data_record: FwBasicBootPerformanceDataRecord = (
+                FwBasicBootPerformanceDataRecord(
+                    fbpt_record_header, fw_basic_boot_performance_data_record_string
+                )
             )
             fbpt_records_list.append(fw_basic_boot_performance_data_record)
         elif fbpt_record_header.performance_record_type == GUID_EVENT_TYPE:
-            guid_event_record_contents_string: bytes = fbpt_contents_file.read(GuidEventRecord.size)
-            guid_event_record: GuidEventRecord = GuidEventRecord(fbpt_record_header, guid_event_record_contents_string)
+            guid_event_record_contents_string: bytes = fbpt_contents_file.read(
+                GuidEventRecord.size
+            )
+            guid_event_record: GuidEventRecord = GuidEventRecord(
+                fbpt_record_header, guid_event_record_contents_string
+            )
             fbpt_records_list.append(guid_event_record)
         elif (
             fbpt_record_header.performance_record_type == DYNAMIC_STRING_EVENT_TYPE
-            or fbpt_record_header.performance_record_type == FPDT_DYNAMIC_STRING_EVENT_TYPE
+            or fbpt_record_header.performance_record_type
+            == FPDT_DYNAMIC_STRING_EVENT_TYPE
         ):
-            dynamic_string_event_record_contents_string: bytes = fbpt_contents_file.read(DynamicStringEventRecord.size)
-            dynamic_string_string_size: int = (
-                fbpt_record_header.record_length - FbptRecordHeader.size - DynamicStringEventRecord.size
+            dynamic_string_event_record_contents_string: bytes = (
+                fbpt_contents_file.read(DynamicStringEventRecord.size)
             )
-            dynamic_string_string_byte_array: bytes = fbpt_contents_file.read(dynamic_string_string_size)
-            dynamic_string_event_record: DynamicStringEventRecord = DynamicStringEventRecord(
-                fbpt_record_header,
-                dynamic_string_event_record_contents_string,
-                dynamic_string_string_byte_array,
-                dynamic_string_string_size,
+            dynamic_string_string_size: int = (
+                fbpt_record_header.record_length
+                - FbptRecordHeader.size
+                - DynamicStringEventRecord.size
+            )
+            dynamic_string_string_byte_array: bytes = fbpt_contents_file.read(
+                dynamic_string_string_size
+            )
+            dynamic_string_event_record: DynamicStringEventRecord = (
+                DynamicStringEventRecord(
+                    fbpt_record_header,
+                    dynamic_string_event_record_contents_string,
+                    dynamic_string_string_byte_array,
+                    dynamic_string_string_size,
+                )
             )
             fbpt_records_list.append(dynamic_string_event_record)
         elif (
             fbpt_record_header.performance_record_type == DUAL_GUID_STRING_EVENT_TYPE
-            or fbpt_record_header.performance_record_type == FPDT_DUAL_GUID_STRING_EVENT_TYPE
+            or fbpt_record_header.performance_record_type
+            == FPDT_DUAL_GUID_STRING_EVENT_TYPE
         ):
-            dual_guid_string_event_record_contents_string: bytes = fbpt_contents_file.read(
-                DualGuidStringEventRecord.size
+            dual_guid_string_event_record_contents_string: bytes = (
+                fbpt_contents_file.read(DualGuidStringEventRecord.size)
             )
             dual_guid_string_string_size: int = (
-                fbpt_record_header.record_length - FbptRecordHeader.size - DualGuidStringEventRecord.size
+                fbpt_record_header.record_length
+                - FbptRecordHeader.size
+                - DualGuidStringEventRecord.size
             )
-            dual_guid_string_string_byte_array: bytes = fbpt_contents_file.read(dual_guid_string_string_size)
-            dual_guid_string_event_record: DualGuidStringEventRecord = DualGuidStringEventRecord(
-                fbpt_record_header,
-                dual_guid_string_event_record_contents_string,
-                dual_guid_string_string_byte_array,
-                dual_guid_string_string_size,
+            dual_guid_string_string_byte_array: bytes = fbpt_contents_file.read(
+                dual_guid_string_string_size
+            )
+            dual_guid_string_event_record: DualGuidStringEventRecord = (
+                DualGuidStringEventRecord(
+                    fbpt_record_header,
+                    dual_guid_string_event_record_contents_string,
+                    dual_guid_string_string_byte_array,
+                    dual_guid_string_string_size,
+                )
             )
             fbpt_records_list.append(dual_guid_string_event_record)
         elif (
             fbpt_record_header.performance_record_type == GUID_QWORD_EVENT_TYPE
             or fbpt_record_header.performance_record_type == FPDT_GUID_QWORD_EVENT_TYPE
         ):
-            guid_qword_event_record_contents_string: bytes = fbpt_contents_file.read(GuidQwordEventRecord.size)
+            guid_qword_event_record_contents_string: bytes = fbpt_contents_file.read(
+                GuidQwordEventRecord.size
+            )
             guid_qword_event_record: GuidQwordEventRecord = GuidQwordEventRecord(
                 fbpt_record_header, guid_qword_event_record_contents_string
             )
             fbpt_records_list.append(guid_qword_event_record)
         elif (
             fbpt_record_header.performance_record_type == GUID_QWORD_STRING_EVENT_TYPE
-            or fbpt_record_header.performance_record_type == FPDT_GUID_QWORD_STRING_EVENT_TYPE
+            or fbpt_record_header.performance_record_type
+            == FPDT_GUID_QWORD_STRING_EVENT_TYPE
         ):
-            guid_qword_string_event_record_contents_string: bytes = fbpt_contents_file.read(
-                GuidQwordStringEventRecord.size
+            guid_qword_string_event_record_contents_string: bytes = (
+                fbpt_contents_file.read(GuidQwordStringEventRecord.size)
             )
             guid_qword_string_string_size: int = (
-                fbpt_record_header.record_length - FbptRecordHeader.size - GuidQwordStringEventRecord.size
+                fbpt_record_header.record_length
+                - FbptRecordHeader.size
+                - GuidQwordStringEventRecord.size
             )
-            guid_qword_string_byte_array: bytes = fbpt_contents_file.read(guid_qword_string_string_size)
-            guid_qword_string_event_record: GuidQwordStringEventRecord = GuidQwordStringEventRecord(
-                fbpt_record_header,
-                guid_qword_string_event_record_contents_string,
-                guid_qword_string_byte_array,
-                guid_qword_string_string_size,
+            guid_qword_string_byte_array: bytes = fbpt_contents_file.read(
+                guid_qword_string_string_size
+            )
+            guid_qword_string_event_record: GuidQwordStringEventRecord = (
+                GuidQwordStringEventRecord(
+                    fbpt_record_header,
+                    guid_qword_string_event_record_contents_string,
+                    guid_qword_string_byte_array,
+                    guid_qword_string_string_size,
+                )
             )
             fbpt_records_list.append(guid_qword_string_event_record)
 
@@ -1406,6 +1526,8 @@ def get_model() -> str:
     """
     import wmi
 
+    print("reeeeee")
+
     try:
         c = wmi.WMI()
         computer_system = c.Win32_ComputerSystem()[0]
@@ -1414,9 +1536,11 @@ def get_model() -> str:
         logging.error(f"Failed to retrieve model: {e}")
         return "Unknown"
 
+
 # Represents the main execution environment to parse FPDT
 class ParserApp:
     def __init__(self):
+        print("kmskmskmskmsks")
         parser = argparse.ArgumentParser(description="FPDT Parser Tool")
         parser.add_argument(
             "-t",
@@ -1461,16 +1585,20 @@ class ParserApp:
         if self.options.output_xml_file:
             if len(self.options.output_xml_file) < 2:
                 logging.critical("The output XML file parameter is invalid")
-                raise ValueError("Output XML file name must be at least 2 characters long")
+                raise ValueError(
+                    "Output XML file name must be at least 2 characters long"
+                )
 
         if self.options.output_text_file:
             if len(self.options.output_text_file) < 2:
                 logging.critical("The output text file parameter is invalid")
-                raise ValueError("Output text file name must be at least 2 characters long")
+                raise ValueError(
+                    "Output text file name must be at least 2 characters long"
+                )
             else:
                 text_log = open(self.options.output_text_file, "w")
                 return text_log
-            
+
     def handle_input_file(self):
         if self.options.input_fbpt_bin:
             if len(self.options.input_fbpt_bin) < 2:
@@ -1478,8 +1606,8 @@ class ParserApp:
                 raise ValueError("Input file name must be at least 2 characters long")
             if not os.path.isfile(self.options.input_fbpt_bin):
                 logging.critical("The input binary file is not found")
-                ValueError("Invalid input file path")
-    
+                raise ValueError("Invalid input file path")
+
     def get_uefi_version_model(self):
         if self.options.input_fbpt_bin is None:
             uefi_version = get_uefi_version()
@@ -1491,20 +1619,24 @@ class ParserApp:
                 uefi_version = m.group(1)
                 model = m.group(2)
             else:
-                logging.critical("The binary file name doesn't contain model name and UEFI version")
-                logging.critical("Tool expects binary name in format FBPT_<ModelName>_<UefiVer>.bin")
+                logging.critical(
+                    "The binary file name doesn't contain model name and UEFI version"
+                )
+                logging.critical(
+                    "Tool expects binary name in format FBPT_<ModelName>_<UefiVer>.bin"
+                )
                 logging.critical("Continuing with N/A for model name and UEFI version")
                 uefi_version = "N/A"
                 model = "N/A"
         return (uefi_version, model)
-    
+
     def write_text_header(self):
         if self.options.output_text_file:
             self.text_log.write(
                 f"  Platform Information\n------------------------------------------------------------------\n"
                 f"UEFI Version : {self.uefi_version}\n  Model        : {self.model}\n"
             )
-    
+
     def write_xml_header(self):
         if self.options.output_xml_file:
             xml_tree = ET.Element("FpdtParserData")
@@ -1526,7 +1658,6 @@ class ParserApp:
             xml_tree.append(xml_repr)
             return xml_tree
 
-
     def write_fpdt_header(self, table):
         if self.options.input_fbpt_bin is None:
             (error_code, data, error_string) = table.get_acpi_table(b"FPDT")
@@ -1539,8 +1670,12 @@ class ParserApp:
                 self.xml_tree.append(fpdt_header.to_xml())
 
             # This assumes we only have one perf record - Firmware Basic Boot Performance Record
-            if (fpdt_header.length - AcpiTableHeader.size) > FwBasicBootPerformanceRecord.size:
-                logging.critical("Extra records are present in FPDT but will be ignored")
+            if (
+                fpdt_header.length - AcpiTableHeader.size
+            ) > FwBasicBootPerformanceRecord.size:
+                logging.critical(
+                    "Extra records are present in FPDT but will be ignored"
+                )
 
             # Parse the basic boot perf record
             fbbpr = FwBasicBootPerformanceRecord(data[AcpiTableHeader.size :])
@@ -1551,67 +1686,73 @@ class ParserApp:
             if self.options.output_xml_file:
                 self.xml_tree.append(fbbpr.to_xml())
 
-        def find_fbpt_file(self, table):
-            if self.options.input_fbpt_bin is None:
-                (return_code, fbpt_buffer) = table.get_fbpt()
+    def find_fbpt_file(self, table):
+        if self.options.input_fbpt_bin is None:
+            (return_code, fbpt_buffer) = table.get_fbpt()
 
-                if return_code != 0:
-                    logging.critical(r"This version of Windows doesn't support access to FBPT - aborting")
-                    raise EnvironmentError("Unsupported platform: cannot access FBPT") 
-                else:
-                    # get_fbpt returned expected return_code, so let's use the buffer it returned
-                    fbpt_file_w = open("FBPT.BIN", "wb")
-                    fbpt_file_w.write(fbpt_buffer)
-                    fbpt_file_w.close()
-                    fbpt_file = open("FBPT.BIN", "rb")
+            if return_code != 0:
+                logging.critical(
+                    r"This version of Windows doesn't support access to FBPT - aborting"
+                )
+                raise EnvironmentError("Unsupported platform: cannot access FBPT")
             else:
-                fbpt_file = open(self.options.input_fbpt_bin, "rb")
-            return fbpt_file
-        
-        def write_fbpt(self, fbpt_file):
-            fbpt_header = FwBasicBootPerformanceTableHeader(fbpt_file.read(FwBasicBootPerformanceTableHeader.size))
-            # Store header into text log and/or XML tree
+                # get_fbpt returned expected return_code, so let's use the buffer it returned
+                fbpt_file_w = open("FBPT.BIN", "wb")
+                fbpt_file_w.write(fbpt_buffer)
+                fbpt_file_w.close()
+                fbpt_file = open("FBPT.BIN", "rb")
+        else:
+            fbpt_file = open(self.options.input_fbpt_bin, "rb")
+        return fbpt_file
+
+    def write_fbpt(self, fbpt_file):
+        fbpt_header = FwBasicBootPerformanceTableHeader(
+            fbpt_file.read(FwBasicBootPerformanceTableHeader.size)
+        )
+        # Store header into text log and/or XML tree
+        if self.options.output_text_file:
+            self.text_log.write(str(fbpt_header))
+        if self.options.output_xml_file:
+            # Store FBPT header and records under a separate element under FPDT
+            fbpt_tree = fbpt_header.to_xml()
+            self.xml_tree.append(fbpt_tree)
+
+    def gather_fbpt_records(self, fbpt_file):
+        fbpt_records_list = list()
+
+        # This helper function parses through the FBPT records and populates the list with records
+        fbpt_parse_result = fbpt_parsing_factory(fbpt_file, fbpt_records_list)
+
+        fbpt_file.close()
+        if self.options.input_fbpt_bin is None:
+            os.remove("FBPT.BIN")
+
+        if fbpt_parse_result == 1:
             if self.options.output_text_file:
-                self.text_log.write(str(fbpt_header))
-            if self.options.output_xml_file:
-                # Store FBPT header and records under a separate element under FPDT
-                fbpt_tree = fbpt_header.to_xml()
-                self.xml_tree.append(fbpt_tree)
-
-            
-        def gather_fbpt_records(self, fbpt_file):
-            fbpt_records_list = list()
-
-            # This helper function parses through the FBPT records and populates the list with records
-            fbpt_parse_result = fbpt_parsing_factory(fbpt_file, fbpt_records_list)
-
-            fbpt_file.close()
-            if self.options.input_fbpt_bin is None:
-                os.remove("FBPT.BIN")
-
-            if fbpt_parse_result == 1:
-                if self.options.output_text_file:
-                    self.text_log.close()
-                logging.shutdown()
-                raise ValueError("Failed to parse FBPT: binary data is malformed or unsupported")
-
-            return fbpt_parse_result
-
-        def write_records(self, fbpt_records_list):
-            if self.options.output_xml_file:
-                for record in fbpt_records_list:
-                    self.fbpt_tree.append(record.to_xml())
-
-                with open(self.options.output_xml_file, "wb") as xml_file:
-                    xml_file.write(ET.tostring(self.xml_tree))
-
-            if self.options.output_text_file:
-                for record in fbpt_records_list:
-                    self.text_log.write(str(record))
-                self.text_log.write(f"\nFBPT Record count: {len(fbpt_records_list)}\n")
                 self.text_log.close()
-            
-            return len(fbpt_records_list)
+            logging.shutdown()
+            raise ValueError(
+                "Failed to parse FBPT: binary data is malformed or unsupported"
+            )
+
+        return fbpt_records_list
+
+    def write_records(self, fbpt_records_list):
+        if self.options.output_xml_file:
+            for record in fbpt_records_list:
+                self.xml_tree.append(record.to_xml())
+
+            with open(self.options.output_xml_file, "wb") as xml_file:
+                xml_file.write(ET.tostring(self.xml_tree))
+
+        if self.options.output_text_file:
+            for record in fbpt_records_list:
+                print(record)
+                self.text_log.write(str(record))
+            self.text_log.write(f"\nFBPT Record count: {len(fbpt_records_list)}\n")
+            self.text_log.close()
+
+        return len(fbpt_records_list)
 
 
 def main() -> None:
