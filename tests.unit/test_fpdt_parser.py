@@ -1,5 +1,7 @@
 from ctypes import c_ulong, c_void_p, create_string_buffer
 import datetime
+import os
+from pathlib import Path
 import struct
 import xml.etree.ElementTree as ET
 import edk2toolext
@@ -8,6 +10,7 @@ from unittest.mock import Mock, patch, call, MagicMock
 from unittest import mock
 import sys
 import types
+import glob
 
 
 from edk2toolext.perf.fpdt_parser import (
@@ -1267,3 +1270,22 @@ class TestParser:
             assert result == 1
             mock_app.xml_tree.append.assert_any_call("<Record1></Record1>")
             mock_app.text_log.write.assert_any_call("Record1")
+
+
+@pytest.fixture(scope="function", autouse=True)
+def cleanup_test_files():
+    yield  # run the test
+    # After test completes, delete any matching files
+    perf_dir = Path("edk2toolext") / "perf"
+    for pattern in [
+        "FBPT.BIN",
+        "test_output.*",
+        "*.xml",
+        "*.bin",
+        "*.txt",
+    ]:
+        for file in perf_dir.glob(pattern):
+            try:
+                os.remove(file)
+            except OSError:
+                pass  # ignore if file doesn't exist
