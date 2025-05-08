@@ -8,7 +8,7 @@ maintainers = [{name = "EDK2 Pytool Maintainers", email = "edk2-pytools@microsof
 dynamic = ["version"]
 description = "Python tools supporting UEFI EDK2 firmware development"
 readme = {file = "readme.md", content-type = "text/markdown"}
-license = {file = "LICENSE"}
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "edk2-pytool-library>=0.20.0",
@@ -24,7 +24,6 @@ dependencies = [
 
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -93,6 +92,9 @@ validate_image_tool = "edk2toolext.image_validation:main"
 fpdt_parser = "edk2toolext.perf.fpdt_parser:main"
 perf_report_generator = "edk2toolext.perf.perf_report_generator:main"
 secureboot_audit = "edk2toolext.windows.secureboot.secureboot_audit:main"
+
+[tool.setuptools]
+packages = ["edk2toolext"]
 
 [tool.setuptools_scm]
 
